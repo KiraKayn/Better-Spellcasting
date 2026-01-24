@@ -40,7 +40,7 @@ ordering="AFTER"
 side="BOTH"
 
 [[dependencies.better_spellcasting]]
-modId="better_combat"
+modId="bettercombat"
 mandatory=true
 versionRange="[1.0,)"
 ordering="AFTER"

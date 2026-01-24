@@ -3,6 +3,7 @@ plugins {
     id 'eclipse'
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0.13, 6.2)'
+    id 'org.spongepowered.mixin' version '0.7.+'
 }
 
 base {
@@ -10,6 +11,8 @@ base {
 }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(javaVersion)
+
+jarJar.enable()
 
 minecraft {
     mappings channel: 'official', version: mc_version
@@ -48,17 +51,91 @@ sourceSets.main.resources {
 
 repositories {
     maven {
+        url "https://www.cursemaven.com"
+        content {
+            includeGroup "curse.maven"
+        }
+    }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = "Modrinth"
+                url = "https://api.modrinth.com/maven"
+            }
+        }
+        forRepositories(fg.repository)
+        filter {
+            includeGroup "maven.modrinth"
+        }
+    }
+    maven {
+        url "https://maven.blamejared.com"
+        content {
+            includeGroup "vazkii.patchouli"
+            includeGroupByRegex "net\\.darkhax.*"
+            includeGroupByRegex "com\\.blamejared.*"
+            includeGroup "org.openzen.zencode"
+            includeGroup "mezz.jei"
+        }
+    }
+    maven {
+        // Curios
+        url "https://maven.theillusivec4.top"
+        content {
+            includeGroupByRegex "top\\.theillusivec4.*"
+        }
+    }
+    maven { url 'https://maven.shedaniel.me/' }
+    maven { url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/' }
+    maven { url 'https://maven.kosmx.dev/' }
+    maven { url "https://rtxyd.github.io/maven-repo" }
+    maven {
         name = "Iron's Maven - Release"
         url = "https://code.redspace.io/releases"
     }
+
     maven {
         name = "Iron's Maven - Snapshots"
         url = "https://code.redspace.io/snapshots"
     }
+    maven { url 'https://jitpack.io' }
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${mc_version}-${forge_version}"
+
+    // Mixin
+    annotationProcessor "org.spongepowered:mixin:${mixin_version}:processor"
+    compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixin_extras_version}"))
+    implementation(jarJar("io.github.llamalad7:mixinextras-forge:${mixin_extras_version}")) {
+        jarJar.ranged(it, "[${mixin_extras_version},)")
+    }
+
+    // Required Dependencies
+    runtimeOnly fg.deobf("curse.maven:attributefix-280510:4911084")
+    implementation fg.deobf("io.redspace:irons_spellbooks:${irons_spells_version}")
+    compileOnly fg.deobf("io.redspace:irons_spellbooks:${irons_spells_version}:api")
+    runtimeOnly fg.deobf("io.redspace:irons_spellbooks:${irons_spells_version}")
+    implementation fg.deobf("curse.maven:better-combat-by-daedelus-639842:7287334")
+
+    // Dev Env Mods
+    runtimeOnly fg.deobf("curse.maven:mmmmmmmmmmmm-225738:6608233")
+
+    // Libs
+    runtimeOnly fg.deobf("curse.maven:cloth-config-348521:5729105")
+    runtimeOnly fg.deobf("top.theillusivec4.curios:curios-forge:${curios_version}")
+    compileOnly fg.deobf("top.theillusivec4.curios:curios-forge:${curios_version}:api")
+    runtimeOnly fg.deobf("dev.kosmx.player-anim:player-animation-lib-forge:${player_anim_version}")
+    runtimeOnly fg.deobf("curse.maven:geckolib-388172:7025129")
+    runtimeOnly fg.deobf("top.theillusivec4.caelus:caelus-forge:${caelus_version}")
+    runtimeOnly fg.deobf("curse.maven:selene-499980:6611244")
+}
+
+mixin {
+    if (project.mixin.toBoolean()) {
+        config "${modid}.mixins.json"
+        add sourceSets.main, "${modid}.refmap.json"
+    }
 }
 
 tasks.named('processResources', ProcessResources).configure {
@@ -81,6 +158,12 @@ tasks.named('processResources', ProcessResources).configure {
     }
 }
 
+tasks.named('jarJar') {
+    dependsOn('reobfJar')
+    finalizedBy('reobfJarJar')
+    archiveClassifier.set('')
+}
+
 tasks.named('jar', Jar).configure {
     manifest {
         attributes([
@@ -90,10 +173,11 @@ tasks.named('jar', Jar).configure {
                 "Implementation-Title"    : fileName,
                 "Implementation-Version"  : version,
                 "Implementation-Vendor"   : author,
-                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+                "MixinConfigs"            : project.mixin.toBoolean() ? "${modid}.mixins.json" : ""
         ])
     }
-    finalizedBy 'reobfJar'
+    finalizedBy 'reobfJar', 'jarJar'
 }
 
 java {
