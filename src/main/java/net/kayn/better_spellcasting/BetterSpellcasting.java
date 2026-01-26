@@ -1,8 +1,9 @@
 package net.kayn.better_spellcasting;
 
 import com.mojang.logging.LogUtils;
-import net.minecraftforge.common.MinecraftForge;
+import net.kayn.better_spellcasting.network.NetworkHandler;
 import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -10,22 +11,29 @@ import org.slf4j.Logger;
 
 @Mod(BetterSpellcasting.MOD_ID)
 public class BetterSpellcasting {
+
     public static final String MOD_ID = "better_spellcasting";
-    private static final Logger LOGGER = LogUtils.getLogger();
+    public static final Logger LOGGER = LogUtils.getLogger();
 
-    public BetterSpellcasting(FMLJavaModLoadingContext context) {
-        IEventBus modEventBus = context.getModEventBus();
+    public static boolean ironSpellbooksLoaded = false;
+    public static boolean betterCombatLoaded = false;
 
-        // Register the commonSetup method for modloading
-        modEventBus.addListener(this::commonSetup);
+    public BetterSpellcasting() {
+        IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
+        modBus.addListener(this::commonSetup);
 
-        // Register ourselves for server and other game events we are interested in
-        MinecraftForge.EVENT_BUS.register(this);
+        ironSpellbooksLoaded = ModList.get().isLoaded("irons_spellbooks");
+        betterCombatLoaded = ModList.get().isLoaded("bettercombat");
 
         LOGGER.info("Better Spellcasting initialized!");
+        LOGGER.info("Iron's Spellbooks loaded: {}", ironSpellbooksLoaded);
+        LOGGER.info("Better Combat loaded: {}", betterCombatLoaded);
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
-        LOGGER.info("Better Spellcasting common setup");
+        event.enqueueWork(() -> {
+            LOGGER.info("Registering BetterSpellcasting network channel");
+            NetworkHandler.register();
+        });
     }
 }
