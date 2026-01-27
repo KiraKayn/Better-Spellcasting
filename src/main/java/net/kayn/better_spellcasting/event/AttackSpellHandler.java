@@ -20,9 +20,8 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.registries.ForgeRegistries;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Handles tracking of swings (client -> server) and casting weapon-attached spells.
@@ -32,8 +31,8 @@ import java.util.UUID;
 @Mod.EventBusSubscriber(modid = BetterSpellcasting.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class AttackSpellHandler {
     private static final long COMBO_TIMEOUT_TICKS = 40L;
-    private static final Map<UUID, ComboState> serverCombo = new HashMap<>();
-    private static final Map<UUID, PendingSpell> pending = new HashMap<>();
+    private static final ConcurrentHashMap<UUID, ComboState> serverCombo = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<UUID, PendingSpell> pending = new ConcurrentHashMap<>();
 
     private static record ComboState(int index, long lastSwingTick, ResourceLocation weaponId) {}
     private static record PendingSpell(SpellAttackData data, int attackIndex) {}
