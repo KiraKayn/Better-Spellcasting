@@ -3,6 +3,7 @@ package net.kayn.better_spellcasting.event;
 import com.google.gson.*;
 import io.redspace.ironsspellbooks.api.registry.SpellRegistry;
 import io.redspace.ironsspellbooks.api.spells.AbstractSpell;
+import io.redspace.ironsspellbooks.api.spells.CastType;
 import net.bettercombat.api.WeaponAttributes;
 import net.bettercombat.logic.WeaponRegistry;
 import net.kayn.better_spellcasting.BetterSpellcasting;
@@ -35,9 +36,7 @@ public class ServerSpellLoader {
             Field registrationsField = WeaponRegistry.class.getDeclaredField("registrations");
             registrationsField.setAccessible(true);
 
-            @SuppressWarnings("unchecked")
-            Map<ResourceLocation, WeaponAttributes> weaponMap =
-                    (Map<ResourceLocation, WeaponAttributes>) registrationsField.get(null);
+            @SuppressWarnings("unchecked") Map<ResourceLocation, WeaponAttributes> weaponMap = (Map<ResourceLocation, WeaponAttributes>) registrationsField.get(null);
 
             if (weaponMap == null || weaponMap.isEmpty()) {
                 return;
@@ -54,14 +53,12 @@ public class ServerSpellLoader {
                 loadSpellDataForWeapon(resourceManager, weaponId, attributes);
             }
 
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 
     private static void loadSpellDataForWeapon(ResourceManager resourceManager, ResourceLocation weaponId, WeaponAttributes attributes) {
-        ResourceLocation jsonLoc = new ResourceLocation(
-                weaponId.getNamespace(),
-                "weapon_attributes/" + weaponId.getPath() + ".json"
-        );
+        ResourceLocation jsonLoc = new ResourceLocation(weaponId.getNamespace(), "weapon_attributes/" + weaponId.getPath() + ".json");
 
         try {
             var resource = resourceManager.getResource(jsonLoc);
@@ -69,8 +66,7 @@ public class ServerSpellLoader {
                 return;
             }
 
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(resource.get().open()))) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(resource.get().open()))) {
 
                 JsonObject root = GSON.fromJson(reader, JsonObject.class);
                 if (root == null || !root.has("attributes")) {
@@ -109,14 +105,23 @@ public class ServerSpellLoader {
 
                     AbstractSpell spell = SpellRegistry.getSpell(new ResourceLocation(spellId));
                     if (spell == SpellRegistry.none()) {
+                        BetterSpellcasting.LOGGER.warn("Unknown spell '{}' in {}", spellId, weaponId);
+                        continue;
+                    }
+                    // Blacklist continuous cast spells
+                    if (spell.getCastType() == CastType.CONTINUOUS) {
+                        BetterSpellcasting.LOGGER.error("CONTINUOUS cast spell '{}' is not supported for weapon attacks in {} attack {}. Skipping.", spellId, weaponId, i);
+                        BetterSpellcasting.LOGGER.error("Continuous spells cannot be bound to weapons. Please use INSTANT or CHARGED spells only.");
                         continue;
                     }
 
+                    // Register the spell data
                     SpellDataHolder.register(weaponId, i, new SpellAttackData(spell, level, target));
                 }
 
             }
 
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 }
