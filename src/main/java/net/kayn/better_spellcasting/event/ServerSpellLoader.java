@@ -116,7 +116,11 @@ public class ServerSpellLoader {
                     }
 
                     // Register the spell data
-                    SpellDataHolder.register(weaponId, i, new SpellAttackData(spell, level, target));
+                    String triggerStr = attack.has("trigger") ? attack.get("trigger").getAsString() : "on_hit";
+                    SpellAttackData.Trigger trigger = SpellAttackData.Trigger.fromString(triggerStr);
+
+                    SpellAttackData pad = new SpellAttackData(spell, level, target, trigger);
+                    SpellDataHolder.register(weaponId, i, pad);
                 }
 
             }

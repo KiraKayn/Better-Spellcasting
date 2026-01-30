@@ -14,7 +14,8 @@
         },
         "spell": "irons_spellbooks:firebolt",
         "level": 1,
-        "target": "TARGET"
+        "target": "TARGET",
+        "trigger": "on_attack"
       },
       {
         "hitbox": "HORIZONTAL_PLANE",
@@ -27,7 +28,8 @@
         },
         "spell": "irons_spellbooks:blood_slash",
         "level": 4,
-        "target": "TARGET"
+        "target": "TARGET",
+        "trigger": "on_attack"
       },
       {
         "hitbox": "FORWARD_BOX",
@@ -41,7 +43,8 @@
         },
         "spell": "irons_spellbooks:heal",
         "level": 1,
-        "target": "SELF"
+        "target": "SELF",
+        "trigger": "on_hit"
       }
     ]
   }

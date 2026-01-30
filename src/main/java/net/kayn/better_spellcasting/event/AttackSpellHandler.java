@@ -23,29 +23,27 @@ import net.minecraftforge.registries.ForgeRegistries;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Handles tracking of swings (client -> server) and casting weapon-attached spells.
- * All spells (self + target) are queued on swing.
- * Spells are executed only on LivingHurtEvent (when the attack connects).
- */
 @Mod.EventBusSubscriber(modid = BetterSpellcasting.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class AttackSpellHandler {
     private static final long COMBO_TIMEOUT_TICKS = 40L;
     private static final ConcurrentHashMap<UUID, ComboState> serverCombo = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, PendingSpell> pending = new ConcurrentHashMap<>();
 
-    private static record ComboState(int index, long lastSwingTick, ResourceLocation weaponId) {}
-    private static record PendingSpell(SpellAttackData data, int attackIndex) {}
+    private static record ComboState(int index, long lastSwingTick, ResourceLocation weaponId) {
+    }
+
+    private static record PendingSpell(SpellAttackData data, int attackIndex) {
+    }
 
     @SubscribeEvent
     public static void onLeftClickEmpty(PlayerInteractEvent.LeftClickEmpty event) {
         Player p = event.getEntity();
         if (!p.level().isClientSide()) return;
-
         if (NetworkHandler.CHANNEL != null) {
             try {
                 NetworkHandler.CHANNEL.sendToServer(new SwingMessage());
-            } catch (Throwable ignored) {}
+            } catch (Throwable ignored) {
+            }
         }
     }
 
@@ -53,17 +51,17 @@ public class AttackSpellHandler {
     public static void onClientAttackEntity(AttackEntityEvent event) {
         Player p = event.getEntity();
         if (!p.level().isClientSide()) return;
-
         if (NetworkHandler.CHANNEL != null) {
             try {
                 NetworkHandler.CHANNEL.sendToServer(new SwingMessage());
-            } catch (Throwable ignored) {}
+            } catch (Throwable ignored) {
+            }
         }
     }
 
     public static void onClientSwingFromPacket(ServerPlayer serverPlayer) {
         if (serverPlayer == null) return;
-        trackSwingServerSide(serverPlayer);
+        trackSwingServerSide(serverPlayer, null);
     }
 
     @SubscribeEvent
@@ -71,10 +69,14 @@ public class AttackSpellHandler {
         Player p = event.getEntity();
         if (p.level().isClientSide()) return;
         if (!(p instanceof ServerPlayer serverPlayer)) return;
-        trackSwingServerSide(serverPlayer);
+
+        LivingEntity attacked = null;
+        if (event.getTarget() instanceof LivingEntity le) attacked = le;
+
+        trackSwingServerSide(serverPlayer, attacked);
     }
 
-    private static void trackSwingServerSide(ServerPlayer player) {
+    private static void trackSwingServerSide(ServerPlayer player, LivingEntity attackedEntity) {
         try {
             var handStack = player.getMainHandItem();
             Item item = handStack.getItem();
@@ -108,14 +110,28 @@ public class AttackSpellHandler {
             }
 
             serverCombo.put(player.getUUID(), new ComboState(nextIndex, now, weaponId));
+
             SpellAttackData data = SpellDataHolder.getSpellData(weaponId, nextIndex);
-            if (data != null) {
-                pending.put(player.getUUID(), new PendingSpell(data, nextIndex));
-            } else {
+            if (data == null) {
                 pending.remove(player.getUUID());
+                return;
             }
 
-        } catch (Throwable ignored) {}
+            if (data.getTrigger() == SpellAttackData.Trigger.ON_ATTACK) {
+                if (data.isSelfCast()) {
+                    SpellCastHelper.castSpellFromAttack(player, data.getSpell(), data.getLevel(), player);
+                } else {
+                    SpellCastHelper.castSpellFromAttack(player, data.getSpell(), data.getLevel(), attackedEntity);
+                }
+                pending.remove(player.getUUID());
+                return;
+            } else {
+                pending.put(player.getUUID(), new PendingSpell(data, nextIndex));
+            }
+
+        } catch (Throwable t) {
+            BetterSpellcasting.LOGGER.error("Error tracking swing on server", t);
+        }
     }
 
     @SubscribeEvent
@@ -132,14 +148,16 @@ public class AttackSpellHandler {
 
         try {
             SpellAttackData data = ps.data();
-            if (data != null) {
-                if (data.isSelfCast()) {
-                    SpellCastHelper.castSpellFromAttack(player, data.getSpell(), data.getLevel(), player);
-                } else {
-                    SpellCastHelper.castSpellFromAttack(player, data.getSpell(), data.getLevel(), victim);
-                }
+            if (data == null) return;
+
+            if (data.isSelfCast()) {
+                SpellCastHelper.castSpellFromAttack(player, data.getSpell(), data.getLevel(), player);
+            } else {
+                SpellCastHelper.castSpellFromAttack(player, data.getSpell(), data.getLevel(), victim);
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            BetterSpellcasting.LOGGER.error("Error casting queued weapon spell", t);
+        }
     }
 
     public static void resetComboFor(Player player) {
