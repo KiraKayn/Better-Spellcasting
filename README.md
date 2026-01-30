@@ -1,2 +1,2 @@
 # Better Spellcasting
-Repository for the (unreleased) Better Spellcasting mod
+- Repository for the Better Spellcasting mod
