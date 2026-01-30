@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * All spells (self + target) are queued on swing.
  * Spells are executed only on LivingDamageEvent (when the attack connects).
  */
+
 @EventBusSubscriber(modid = BetterSpellcasting.MOD_ID)
 public class AttackSpellHandler {
     private static final long COMBO_TIMEOUT_TICKS = 40L;
@@ -41,26 +42,19 @@ public class AttackSpellHandler {
     public static void onLeftClickEmpty(PlayerInteractEvent.LeftClickEmpty event) {
         Player p = event.getEntity();
         if (!p.level().isClientSide()) return;
-
-        try {
-            PacketDistributor.sendToServer(new SwingMessage());
-        } catch (Throwable ignored) {}
+        try { PacketDistributor.sendToServer(new SwingMessage()); } catch (Throwable ignored) {}
     }
 
     @SubscribeEvent
     public static void onClientAttackEntity(AttackEntityEvent event) {
         Player p = event.getEntity();
         if (!p.level().isClientSide()) return;
-
-        try {
-            PacketDistributor.sendToServer(new SwingMessage());
-        } catch (Throwable ignored) {}
+        try { PacketDistributor.sendToServer(new SwingMessage()); } catch (Throwable ignored) {}
     }
 
-    public static void onClientSwingFromPacket(Player serverPlayer) {
+    public static void onClientSwingFromPacket(ServerPlayer serverPlayer) {
         if (serverPlayer == null) return;
-        if (!(serverPlayer instanceof ServerPlayer sp)) return;
-        trackSwingServerSide(sp);
+        trackSwingServerSide(serverPlayer, null);
     }
 
     @SubscribeEvent
@@ -68,10 +62,12 @@ public class AttackSpellHandler {
         Player p = event.getEntity();
         if (p.level().isClientSide()) return;
         if (!(p instanceof ServerPlayer serverPlayer)) return;
-        trackSwingServerSide(serverPlayer);
+        LivingEntity attacked = null;
+        if (event.getTarget() instanceof LivingEntity le) attacked = le;
+        trackSwingServerSide(serverPlayer, attacked);
     }
 
-    private static void trackSwingServerSide(ServerPlayer player) {
+    private static void trackSwingServerSide(ServerPlayer player, LivingEntity attackedEntity) {
         try {
             var handStack = player.getMainHandItem();
             Item item = handStack.getItem();
@@ -93,26 +89,33 @@ public class AttackSpellHandler {
             long now = player.level().getGameTime();
             ComboState state = serverCombo.get(player.getUUID());
 
-            if (state != null && state.lastSwingTick == now && weaponId.equals(state.weaponId)) {
+            if (state != null && state.lastSwingTick == now && weaponId.equals(state.weaponId)) return;
+
+            int nextIndex = (state == null || !weaponId.equals(state.weaponId) || (now - state.lastSwingTick) > COMBO_TIMEOUT_TICKS)
+                    ? 0 : (state.index + 1) % max;
+
+            serverCombo.put(player.getUUID(), new ComboState(nextIndex, now, weaponId));
+
+            SpellAttackData data = SpellDataHolder.getSpellData(weaponId, nextIndex);
+            if (data == null) {
+                pending.remove(player.getUUID());
                 return;
             }
 
-            int nextIndex;
-            if (state == null || !weaponId.equals(state.weaponId) || (now - state.lastSwingTick) > COMBO_TIMEOUT_TICKS) {
-                nextIndex = 0;
-            } else {
-                nextIndex = (state.index + 1) % max;
-            }
-
-            serverCombo.put(player.getUUID(), new ComboState(nextIndex, now, weaponId));
-            SpellAttackData data = SpellDataHolder.getSpellData(weaponId, nextIndex);
-            if (data != null) {
-                pending.put(player.getUUID(), new PendingSpell(data, nextIndex));
-            } else {
+            if (data.getTrigger() == SpellAttackData.Trigger.ON_ATTACK) {
+                if (data.isSelfCast()) {
+                    SpellCastHelper.castSpellFromAttack(player, data.getSpell(), data.getLevel(), player);
+                } else {
+                    SpellCastHelper.castSpellFromAttack(player, data.getSpell(), data.getLevel(), attackedEntity);
+                }
                 pending.remove(player.getUUID());
+            } else {
+                pending.put(player.getUUID(), new PendingSpell(data, nextIndex));
             }
 
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            BetterSpellcasting.LOGGER.error("Error tracking swing on server", t);
+        }
     }
 
     @SubscribeEvent
@@ -129,12 +132,11 @@ public class AttackSpellHandler {
 
         try {
             SpellAttackData data = ps.data();
-            if (data != null) {
-                if (data.isSelfCast()) {
-                    SpellCastHelper.castSpellFromAttack(player, data.getSpell(), data.getLevel(), player);
-                } else {
-                    SpellCastHelper.castSpellFromAttack(player, data.getSpell(), data.getLevel(), victim);
-                }
+            if (data == null) return;
+            if (data.isSelfCast()) {
+                SpellCastHelper.castSpellFromAttack(player, data.getSpell(), data.getLevel(), player);
+            } else {
+                SpellCastHelper.castSpellFromAttack(player, data.getSpell(), data.getLevel(), victim);
             }
         } catch (Throwable ignored) {}
     }
