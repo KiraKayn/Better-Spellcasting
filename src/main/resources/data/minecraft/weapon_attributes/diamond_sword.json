@@ -12,7 +12,7 @@
         "swing_sound": {
           "id": "bettercombat:sword_slash"
         },
-        "spell": "irons_spellbooks:firebolt",
+        "spell": "irons_spellbooks:divine_smite",
         "level": 1,
         "target": "TARGET",
         "trigger": "on_attack"
@@ -26,7 +26,7 @@
         "swing_sound": {
           "id": "bettercombat:sword_slash"
         },
-        "spell": "irons_spellbooks:blood_slash",
+        "spell": "irons_spellbooks:frostwave",
         "level": 4,
         "target": "TARGET",
         "trigger": "on_attack"
@@ -41,10 +41,10 @@
           "id": "bettercombat:sword_slash",
           "pitch": 1.2
         },
-        "spell": "irons_spellbooks:heal",
-        "level": 1,
-        "target": "SELF",
-        "trigger": "on_hit"
+        "spell": "irons_spellbooks:eldritch_blast",
+        "level": 4,
+        "target": "TARGET",
+        "trigger": "on_attack"
       }
     ]
   }
