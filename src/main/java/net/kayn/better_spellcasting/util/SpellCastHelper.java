@@ -5,52 +5,43 @@ import io.redspace.ironsspellbooks.api.magic.MagicData;
 import io.redspace.ironsspellbooks.api.spells.AbstractSpell;
 import io.redspace.ironsspellbooks.api.spells.CastSource;
 import io.redspace.ironsspellbooks.api.spells.CastType;
+import io.redspace.ironsspellbooks.capabilities.magic.RecastInstance;
+import io.redspace.ironsspellbooks.capabilities.magic.RecastResult;
 import io.redspace.ironsspellbooks.capabilities.magic.TargetEntityCastData;
 import io.redspace.ironsspellbooks.network.casting.OnCastStartedPacket;
 import io.redspace.ironsspellbooks.network.casting.OnClientCastPacket;
 import io.redspace.ironsspellbooks.network.casting.SyncTargetingDataPacket;
 import io.redspace.ironsspellbooks.network.casting.UpdateCastingStatePacket;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-/**
- * Utility class for casting weapon-attached spells.
- * Supports optional free casts that do not consume mana.
- */
+// Utility class for casting weapon-attached spells.
 public class SpellCastHelper {
 
-    /**
-     * Casts a spell from an attack.
-     * @param caster the entity performing the cast
-     * @param spell the spell to cast
-     * @param spellLevel spell level
-     * @param target the target entity (can be caster for self)
-     * @param freeCast if true, bypasses MagicData.initiateCast to avoid charging mana
-     */
-    public static void castSpellFromAttack(LivingEntity caster, AbstractSpell spell,
-                                           int spellLevel, LivingEntity target, boolean freeCast) {
+    public static void castSpellFromAttack(LivingEntity caster, AbstractSpell spell, int spellLevel, LivingEntity target, boolean freeCast) {
         if (caster.level().isClientSide()) return;
 
         MagicData magicData = MagicData.getPlayerMagicData(caster);
+
         if (magicData.isCasting()) {
             try {
                 AbstractSpell oldSpell = magicData.getCastingSpell().getSpell();
-                oldSpell.onCast(caster.level(), magicData.getCastingSpellLevel(), caster,
-                        magicData.getCastSource(), magicData);
-                oldSpell.onServerCastComplete(caster.level(), magicData.getCastingSpellLevel(),
-                        caster, magicData, false);
-            } catch (Throwable ignored) {}
+                oldSpell.onCast(caster.level(), magicData.getCastingSpellLevel(), caster, magicData.getCastSource(), magicData);
+                oldSpell.onServerCastComplete(caster.level(), magicData.getCastingSpellLevel(), caster, magicData, false);
+            } catch (Throwable ignored) {
+            }
+
             magicData.resetCastingState();
             magicData = MagicData.getPlayerMagicData(caster);
         }
 
         if (target != null) {
             magicData.setAdditionalCastData(new TargetEntityCastData(target));
+
             if (caster instanceof ServerPlayer serverPlayer && spell.getCastType() != CastType.INSTANT) {
-                PacketDistributor.sendToPlayer(serverPlayer, (CustomPacketPayload) new SyncTargetingDataPacket(target, spell));
+                PacketDistributor.sendToPlayer(serverPlayer, new SyncTargetingDataPacket(target, spell));
             }
         }
 
@@ -67,16 +58,18 @@ public class SpellCastHelper {
                 try {
                     spell.onCast(caster.level(), spellLevel, caster, CastSource.SPELLBOOK, magicData);
                     spell.onServerCastComplete(caster.level(), spellLevel, caster, magicData, false);
-                } catch (Throwable ignored) {}
+                } catch (Throwable ignored) {
+                }
             }
         }
     }
 
-    private static void castSpellForPlayer(AbstractSpell spell, int spellLevel,
-                                           ServerPlayer serverPlayer, MagicData magicData) {
+    private static void castSpellForPlayer(AbstractSpell spell, int spellLevel, ServerPlayer serverPlayer, MagicData magicData) {
         if (magicData.isCasting()) return;
 
-        if (serverPlayer.isUsingItem()) serverPlayer.stopUsingItem();
+        if (serverPlayer.isUsingItem()) {
+            serverPlayer.stopUsingItem();
+        }
 
         int effectiveCastTime = 0;
         if (spell.getCastType() == CastType.CONTINUOUS) {
@@ -88,38 +81,40 @@ public class SpellCastHelper {
 
         spell.onServerPreCast(serverPlayer.level(), spellLevel, serverPlayer, magicData);
 
-        PacketDistributor.sendToPlayer(serverPlayer,
-                (CustomPacketPayload) new UpdateCastingStatePacket(spell.getSpellId(), spellLevel, effectiveCastTime,
-                        CastSource.SPELLBOOK, "weapon_attack"));
-        PacketDistributor.sendToPlayer(serverPlayer,
-                (CustomPacketPayload) new OnCastStartedPacket(serverPlayer.getUUID(), spell.getSpellId(), spellLevel));
+        PacketDistributor.sendToPlayer(serverPlayer, new UpdateCastingStatePacket(spell.getSpellId(), spellLevel, effectiveCastTime, CastSource.SPELLBOOK, "weapon_attack"));
+
+        PacketDistributor.sendToPlayer(serverPlayer, new OnCastStartedPacket(serverPlayer.getUUID(), spell.getSpellId(), spellLevel));
 
         if (effectiveCastTime == 0) {
             spell.onCast(serverPlayer.level(), spellLevel, serverPlayer, CastSource.SPELLBOOK, magicData);
-            PacketDistributor.sendToPlayer(serverPlayer,
-                    (CustomPacketPayload) new OnClientCastPacket(spell.getSpellId(), spellLevel, CastSource.SPELLBOOK,
-                            magicData.getAdditionalCastData()));
+
+            PacketDistributor.sendToPlayer(serverPlayer, new OnClientCastPacket(spell.getSpellId(), spellLevel, CastSource.SPELLBOOK, magicData.getAdditionalCastData()));
         }
     }
 
-    private static void freeCastSpellForPlayer(AbstractSpell spell, int spellLevel,
-                                               ServerPlayer serverPlayer, MagicData magicData) {
+    private static void freeCastSpellForPlayer(AbstractSpell spell, int spellLevel, ServerPlayer serverPlayer, MagicData magicData) {
         try {
-            if (serverPlayer.isUsingItem()) serverPlayer.stopUsingItem();
+            if (serverPlayer.isUsingItem()) {
+                serverPlayer.stopUsingItem();
+            }
 
             spell.onServerPreCast(serverPlayer.level(), spellLevel, serverPlayer, magicData);
 
             spell.onCast(serverPlayer.level(), spellLevel, serverPlayer, CastSource.SPELLBOOK, magicData);
+
             spell.onServerCastComplete(serverPlayer.level(), spellLevel, serverPlayer, magicData, false);
 
-            PacketDistributor.sendToPlayer(serverPlayer,
-                    (CustomPacketPayload) new OnClientCastPacket(spell.getSpellId(), spellLevel, CastSource.SPELLBOOK,
-                            magicData.getAdditionalCastData()));
-        } catch (Throwable ignored) {}
+            RecastInstance recastInstance = magicData.getPlayerRecasts().getRecastInstance(spell.getSpellId());
+            if (recastInstance != null) {
+                magicData.getPlayerRecasts().removeRecast(recastInstance, RecastResult.USED_ALL_RECASTS);
+            }
+
+            PacketDistributor.sendToPlayer(serverPlayer, new OnClientCastPacket(spell.getSpellId(), spellLevel, CastSource.SPELLBOOK, magicData.getAdditionalCastData()));
+        } catch (Throwable ignored) {
+        }
     }
 
-    public static void castSpellFromAttack(LivingEntity caster, AbstractSpell spell,
-                                           int spellLevel, LivingEntity target) {
+    public static void castSpellFromAttack(LivingEntity caster, AbstractSpell spell, int spellLevel, LivingEntity target) {
         castSpellFromAttack(caster, spell, spellLevel, target, true);
     }
 }

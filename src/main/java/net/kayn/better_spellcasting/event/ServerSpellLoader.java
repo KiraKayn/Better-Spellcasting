@@ -36,9 +36,7 @@ public class ServerSpellLoader {
             Field registrationsField = WeaponRegistry.class.getDeclaredField("registrations");
             registrationsField.setAccessible(true);
 
-            @SuppressWarnings("unchecked")
-            Map<ResourceLocation, WeaponAttributes> weaponMap =
-                    (Map<ResourceLocation, WeaponAttributes>) registrationsField.get(null);
+            @SuppressWarnings("unchecked") Map<ResourceLocation, WeaponAttributes> weaponMap = (Map<ResourceLocation, WeaponAttributes>) registrationsField.get(null);
 
             if (weaponMap == null || weaponMap.isEmpty()) {
                 return;
@@ -59,13 +57,8 @@ public class ServerSpellLoader {
         }
     }
 
-    private static void loadSpellDataForWeapon(ResourceManager resourceManager,
-                                               ResourceLocation weaponId,
-                                               WeaponAttributes attributes) {
-        ResourceLocation jsonLoc = ResourceLocation.fromNamespaceAndPath(
-                weaponId.getNamespace(),
-                "weapon_attributes/" + weaponId.getPath() + ".json"
-        );
+    private static void loadSpellDataForWeapon(ResourceManager resourceManager, ResourceLocation weaponId, WeaponAttributes attributes) {
+        ResourceLocation jsonLoc = ResourceLocation.fromNamespaceAndPath(weaponId.getNamespace(), "weapon_attributes/" + weaponId.getPath() + ".json");
 
         try {
             var resource = resourceManager.getResource(jsonLoc);
@@ -73,8 +66,7 @@ public class ServerSpellLoader {
                 return;
             }
 
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(resource.get().open()))) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(resource.get().open()))) {
 
                 JsonObject root = GSON.fromJson(reader, JsonObject.class);
                 if (root == null || !root.has("attributes")) {
@@ -111,9 +103,7 @@ public class ServerSpellLoader {
                     int level = attack.has("level") ? attack.get("level").getAsInt() : 1;
                     String target = attack.has("target") ? attack.get("target").getAsString() : "TARGET";
 
-                    AbstractSpell spell = SpellRegistry.getSpell(
-                            ResourceLocation.parse(spellId)
-                    );
+                    AbstractSpell spell = SpellRegistry.getSpell(ResourceLocation.parse(spellId));
                     if (spell == SpellRegistry.none()) {
                         BetterSpellcasting.LOGGER.warn("Unknown spell '{}' in {}", spellId, weaponId);
                         continue;
@@ -121,18 +111,11 @@ public class ServerSpellLoader {
 
                     // Blacklist continuous cast spells
                     if (spell.getCastType() == CastType.CONTINUOUS) {
-                        BetterSpellcasting.LOGGER.error(
-                                "CONTINUOUS cast spell '{}' is not supported for weapon attacks in {} attack {}. Skipping.",
-                                spellId, weaponId, i
-                        );
-                        BetterSpellcasting.LOGGER.error(
-                                "Continuous spells cannot be bound to weapons. Please use INSTANT or CHARGED spells only."
-                        );
+                        BetterSpellcasting.LOGGER.error("CONTINUOUS cast spell '{}' is not supported for weapon attacks in {} attack {}. Skipping.", spellId, weaponId, i);
+                        BetterSpellcasting.LOGGER.error("Continuous spells cannot be bound to weapons. Please use INSTANT or CHARGED spells only.");
                         continue;
                     }
 
-                    // Register the spell data
-                    // Register the spell data
                     String triggerStr = attack.has("trigger") ? attack.get("trigger").getAsString() : "on_hit";
                     SpellAttackData.Trigger trigger = SpellAttackData.Trigger.fromString(triggerStr);
 
